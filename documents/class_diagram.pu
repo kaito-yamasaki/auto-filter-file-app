@@ -1,56 +1,79 @@
 @startuml
-title Auto File Sorter - with GUI
+skinparam classAttributeIconSize 0
 
-' =========================
-' GUI（プレゼン層）
-' =========================
-class MainWindow {
-  - sorter: FileSorter
-  + start(): void
-  + stop(): void
-  + onFileDetected(path: string): void
+title auto-filter-file-app Class Diagram
+
+package "application" {
+  class Rule {
+    - keyword
+    - path
+    + __init__(keyword, path)
+    + matches(filename)
+  }
+
+  class RuleEngine {
+    - rules
+    - default_path
+    + __init__(rules, default_path=None)
+    + find_destination(filename)
+  }
+
+  class FileSorter {
+    - rule_engine
+    - file_repo
+    - logger
+    + __init__(rule_engine, file_repo, logger)
+    + sort(filepath)
+  }
 }
 
-' =========================
-' アプリ層
-' =========================
-class FileSorter {
-  - ruleEngine: RuleEngine
-  - fileRepository: FileRepository
-  - logger: Logger
-  + sort(filepath: string): void
+package "infra" {
+  class FileRepository {
+    - root_path
+    + __init__(root_path)
+    + move(src, relative_path)
+  }
+
+  class Logger {
+    + log(message)
+  }
 }
 
-class RuleEngine {
-  - rules: List<Rule>
-  - defaultPath: string
-  + findDestination(filename: string): string
+package "ui" {
+  class MainWindow {
+    - sorter
+    - config
+    - timer
+    - incoming_input
+    - root_input
+    - keyword_input
+    - path_input
+    - rule_list
+    - log
+    - btn_start
+    - btn_end
+    + __init__(sorter, config)
+    + select_folder(field)
+    + add_rule()
+    + delete_rule()
+    + refresh_rules()
+    + start()
+    + end()
+    + process_incoming_files()
+    + dark_theme()
+  }
 }
 
-class Rule {
-  - keyword: string
-  - path: string
-  + matches(filename: string): bool
-}
+class QWidget
+class QTimer
 
-' =========================
-' インフラ層
-' =========================
-class FileRepository {
-  + move(src: string, relativePath: string): void
-}
-
-class Logger {
-  + log(message: string): void
-}
-
-' =========================
-' 関係
-' =========================
+MainWindow --|> QWidget
+MainWindow *-- QTimer
 MainWindow --> FileSorter : uses
-FileSorter --> RuleEngine
-FileSorter --> FileRepository
-FileSorter --> Logger
-RuleEngine --> Rule
+
+RuleEngine "1" o-- "*" Rule : contains
+FileSorter --> RuleEngine : uses
+FileSorter --> FileRepository : uses
+FileSorter --> Logger : uses
 
 @enduml
