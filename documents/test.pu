@@ -1,0 +1,56 @@
+@startuml
+title Auto File Sorter - with GUI
+
+' =========================
+' GUI（プレゼン層）
+' =========================
+class MainWindow {
+  - sorter: FileSorter
+  + start(): void
+  + stop(): void
+  + onFileDetected(path: string): void
+}
+
+' =========================
+' アプリ層
+' =========================
+class FileSorter {
+  - ruleEngine: RuleEngine
+  - fileRepository: FileRepository
+  - logger: Logger
+  + sort(filepath: string): void
+}
+
+class RuleEngine {
+  - rules: List<Rule>
+  - defaultPath: string
+  + findDestination(filename: string): string
+}
+
+class Rule {
+  - keyword: string
+  - path: string
+  + matches(filename: string): bool
+}
+
+' =========================
+' インフラ層
+' =========================
+class FileRepository {
+  + move(src: string, relativePath: string): void
+}
+
+class Logger {
+  + log(message: string): void
+}
+
+' =========================
+' 関係
+' =========================
+MainWindow --> FileSorter : uses
+FileSorter --> RuleEngine
+FileSorter --> FileRepository
+FileSorter --> Logger
+RuleEngine --> Rule
+
+@enduml
