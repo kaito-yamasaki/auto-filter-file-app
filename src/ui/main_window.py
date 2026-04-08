@@ -2,7 +2,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QLineEdit, QTextEdit, QListWidget, QFileDialog
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QTimer
+import os
 
 
 class MainWindow(QWidget):
@@ -10,6 +11,8 @@ class MainWindow(QWidget):
         super().__init__()
         self.sorter = sorter
         self.config = config
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.process_incoming_files)
 
         self.setWindowTitle("Auto File Sorter")
         self.setGeometry(200, 200, 900, 500)
@@ -23,7 +26,8 @@ class MainWindow(QWidget):
 
         # 監視フォルダ
         left.addWidget(QLabel("監視フォルダ"))
-        self.incoming_input = QLineEdit(config.get("incoming_folder", ""))
+        incoming_path = config.get("incoming", config.get("incoming_folder", ""))
+        self.incoming_input = QLineEdit(incoming_path)
         btn_incoming = QPushButton("参照")
         btn_incoming.clicked.connect(lambda: self.select_folder(self.incoming_input))
 
@@ -32,7 +36,8 @@ class MainWindow(QWidget):
 
         # 保存先
         left.addWidget(QLabel("保存先ルート"))
-        self.root_input = QLineEdit(config.get("project_root", ""))
+        root_path = config.get("root", config.get("project_root", ""))
+        self.root_input = QLineEdit(root_path)
         btn_root = QPushButton("参照")
         btn_root.clicked.connect(lambda: self.select_folder(self.root_input))
 
@@ -65,10 +70,14 @@ class MainWindow(QWidget):
         self.refresh_rules()
 
         # 操作ボタン
-        btn_test = QPushButton("テスト仕分け")
-        btn_test.clicked.connect(self.test_sort)
+        self.btn_start = QPushButton("開始")
+        self.btn_start.clicked.connect(self.start)
+        self.btn_end = QPushButton("終了")
+        self.btn_end.clicked.connect(self.end)
+        self.btn_end.setEnabled(False)
 
-        left.addWidget(btn_test)
+        left.addWidget(self.btn_start)
+        left.addWidget(self.btn_end)
 
         # ------------------------
         # 右パネル（ログ）
@@ -139,12 +148,59 @@ class MainWindow(QWidget):
             self.rule_list.addItem(f"{k} → {v}")
 
     # ------------------------
-    # テスト処理
+    # 開始
     # ------------------------
-    def test_sort(self):
-        test_path = self.incoming_input.text() + "/_test.txt"
-        self.sorter.sort(test_path)
-        self.log.append("テスト実行")
+    def start(self):
+        incoming_dir = self.incoming_input.text().strip()
+
+        if not incoming_dir or not os.path.isdir(incoming_dir):
+            self.log.append("⚠ 監視フォルダが存在しません")
+            return
+
+        if self.timer.isActive():
+            return
+
+        self.timer.start(1000)
+        self.btn_start.setEnabled(False)
+        self.btn_end.setEnabled(True)
+        self.log.append("監視を開始しました")
+
+    # ------------------------
+    # 停止
+    # ------------------------
+    def end(self):
+        if not self.timer.isActive():
+            return
+
+        self.timer.stop()
+        self.btn_start.setEnabled(True)
+        self.btn_end.setEnabled(False)
+        self.log.append("監視を停止しました")
+
+    # ------------------------
+    # 監視フォルダ処理
+    # ------------------------
+    def process_incoming_files(self):
+        incoming_dir = self.incoming_input.text().strip()
+
+        if not incoming_dir or not os.path.isdir(incoming_dir):
+            self.log.append("⚠ 監視フォルダが存在しません")
+            self.end()
+            return
+
+        files = [
+            os.path.join(incoming_dir, name)
+            for name in os.listdir(incoming_dir)
+            if os.path.isfile(os.path.join(incoming_dir, name))
+        ]
+
+        if not files:
+            return
+
+        for path in files:
+            self.sorter.sort(path)
+
+        self.log.append(f"仕分け実行: {len(files)} 件")
 
     # ------------------------
     # ダークテーマ
