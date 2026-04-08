@@ -7,6 +7,10 @@ class FileSorter:
         self.logger = logger
 
     def sort(self, filepath):
+        if not os.path.exists(filepath):
+            self.logger.log(f"スキップ（存在しない）: {filepath}")
+            return
+
         filename = os.path.basename(filepath)
 
         dest = self.rule_engine.find_destination(filename)

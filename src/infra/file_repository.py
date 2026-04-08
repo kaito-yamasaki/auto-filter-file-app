@@ -7,14 +7,15 @@ class FileRepository:
         self.root_path = root_path
 
     def move(self, src, relative_path):
+        if not os.path.exists(src):
+            return
+
         target = os.path.join(self.root_path, relative_path)
         os.makedirs(target, exist_ok=True)
 
         dst = os.path.join(target, os.path.basename(src))
 
-        for _ in range(5):
-            try:
-                shutil.move(src, dst)
-                return
-            except PermissionError:
-                time.sleep(0.5)
+        try:
+            shutil.move(src, dst)
+        except FileNotFoundError:
+            pass
