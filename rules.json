@@ -8,6 +8,7 @@
     "_spec_e": "2_仕様書/電気仕様",
     "_fem": "3_解析/FEM",
     "_test": "3_解析/試験データ",
-    "_temp": "4_Temp"
+    "_temp": "4_Temp",
+    "_aaa": "5_XXX/YYY"
   }
 }

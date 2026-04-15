@@ -6,7 +6,9 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 import csv
+import json
 import os
+from pathlib import Path
 
 
 class DropArea(QLabel):
@@ -40,6 +42,7 @@ class MainWindow(QWidget):
         self.log_dir = config.get("log_dir", "logs")
         self.log_file = config.get("log_file", "sort_log.csv")
         self.log_path = os.path.join(self.log_dir, self.log_file)
+        self.config_path = Path(__file__).resolve().parents[2] / "rules.json"
 
         self.setWindowTitle("Auto File Sorter")
         self.setGeometry(200, 200, 900, 500)
@@ -82,9 +85,11 @@ class MainWindow(QWidget):
         # ルール入力
         left.addWidget(QLabel("キーワード"))
         self.keyword_input = QLineEdit()
+        left.addWidget(self.keyword_input)
 
         left.addWidget(QLabel("保存先（相対パス）"))
         self.path_input = QLineEdit()
+        left.addWidget(self.path_input)
 
         btn_add = QPushButton("ルール追加")
         btn_add.clicked.connect(self.add_rule)
@@ -92,8 +97,6 @@ class MainWindow(QWidget):
         btn_delete = QPushButton("ルール削除")
         btn_delete.clicked.connect(self.delete_rule)
 
-        left.addWidget(self.keyword_input)
-        left.addWidget(self.path_input)
         left.addWidget(btn_add)
         left.addWidget(btn_delete)
 
@@ -243,6 +246,7 @@ class MainWindow(QWidget):
             return
 
         self.config["rules"][key] = path
+        self.save_config_file()
         self.refresh_rules()
         self.log.append(f"追加: {key} → {path}")
 
@@ -258,8 +262,16 @@ class MainWindow(QWidget):
         key = text.split(" → ")[0]
 
         del self.config["rules"][key]
+        self.save_config_file()
         self.refresh_rules()
         self.log.append(f"削除: {key}")
+
+    def save_config_file(self):
+        try:
+            with open(self.config_path, "w", encoding="utf-8") as file:
+                json.dump(self.config, file, ensure_ascii=False, indent=2)
+        except OSError as error:
+            self.log.append(f"⚠ rules.json 保存失敗: {error}")
 
     # ------------------------
     # ルール一覧更新
