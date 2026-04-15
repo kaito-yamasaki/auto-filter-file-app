@@ -8,7 +8,7 @@ class FileSorter:
 
     def sort(self, filepath):
         if not os.path.exists(filepath):
-            self.logger.log(f"スキップ（存在しない）: {filepath}")
+            self.logger.log_event(filepath, "", "SKIPPED", "ファイルが存在しません")
             return
 
         filename = os.path.basename(filepath)
@@ -16,8 +16,12 @@ class FileSorter:
         dest = self.rule_engine.find_destination(filename)
 
         if not dest:
-            self.logger.log(f"未分類: {filename}")
+            self.logger.log_event(filename, "", "UNCLASSIFIED", "該当ルールなし")
             return
 
-        self.file_repo.move(filepath, dest)
-        self.logger.log(f"{filename} → {dest}")
+        moved_path = self.file_repo.move(filepath, dest)
+        if moved_path:
+            self.logger.log_event(filename, dest, "MOVED", moved_path)
+            return
+
+        self.logger.log_event(filename, dest, "FAILED", "移動に失敗しました")

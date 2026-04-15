@@ -16,7 +16,11 @@ if __name__ == "__main__":
     rule_engine = RuleEngine(rules, config.get("default"))
 
     file_repo = FileRepository(config["root"])
-    logger = Logger()
+    logger = Logger(
+        log_dir=config.get("log_dir", "logs"),
+        log_file_name=config.get("log_file", "sort_log.csv"),
+        user_name=config.get("user_name")
+    )
 
     sorter = FileSorter(rule_engine, file_repo, logger)
 
