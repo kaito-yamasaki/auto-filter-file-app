@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QLineEdit, QListWidget, QFileDialog,
+    QTabWidget,
     QTreeWidget, QTreeWidgetItem,
     QTableWidget, QTableWidgetItem, QHeaderView
 )
@@ -48,27 +49,27 @@ class MainWindow(QWidget):
         self.setGeometry(200, 200, 900, 500)
 
         main_layout = QVBoxLayout()
-        main_layout.addWidget(self.build_main_tab())
+        main_layout.addWidget(self.build_main_tabs())
 
         self.setLayout(main_layout)
 
         self.setStyleSheet(self.dark_theme())
         self.refresh_visualization()
 
-    def build_main_tab(self):
-        tab = QWidget()
-        main_layout = QHBoxLayout()
+    def build_main_tabs(self):
+        tabs = QTabWidget()
+        tabs.addTab(self.build_sort_rule_tab(), "仕分け・ルール")
+        tabs.addTab(self.build_visualization_tab(), "フォルダ構成・移動履歴")
+        return tabs
 
-        # ------------------------
-        # 左パネル（設定）
-        # ------------------------
+    def build_sort_rule_tab(self):
+        tab = QWidget()
         left = QVBoxLayout()
 
         left.addWidget(QLabel("ドラッグ＆ドロップ仕分け"))
         self.drop_area = DropArea(self.process_dropped_files, self)
         left.addWidget(self.drop_area)
 
-        # 保存先
         left.addWidget(QLabel("保存先ルート"))
         root_path = self.config.get("root", self.config.get("project_root", ""))
         self.root_input = QLineEdit(root_path)
@@ -97,28 +98,40 @@ class MainWindow(QWidget):
         left.addWidget(btn_delete)
 
         # ルール一覧
-        left.addWidget(QLabel("ルール一覧"))
+        right = QVBoxLayout()
+
+        right.addWidget(QLabel("ルール一覧"))
         self.rule_list = QListWidget()
-        left.addWidget(self.rule_list)
+        right.addWidget(self.rule_list)
 
         self.refresh_rules()
+        right.addStretch()
 
-        # ------------------------
-        # 右パネル（可視化）
-        # ------------------------
-        right = QVBoxLayout()
+        # 全体のレイアウト
+        layout = QHBoxLayout()
+        layout.addLayout(left, 3)
+        layout.addLayout(right, 5)
+        tab.setLayout(layout)
+
+        return tab
+
+    def build_visualization_tab(self):
+        tab = QWidget()
+        left = QVBoxLayout()
+
         controls = QHBoxLayout()
         btn_refresh = QPushButton("表示を更新")
         btn_refresh.clicked.connect(self.refresh_visualization)
         controls.addWidget(btn_refresh)
         controls.addStretch()
-        right.addLayout(controls)
+        left.addLayout(controls)
 
-        right.addWidget(QLabel("現在のフォルダ構成"))
+        left.addWidget(QLabel("現在のフォルダ構成"))
         self.directory_tree = QTreeWidget()
         self.directory_tree.setHeaderLabels(["フォルダ / ファイル"])
-        right.addWidget(self.directory_tree, 3)
+        left.addWidget(self.directory_tree, 1)
 
+        right = QVBoxLayout()
         right.addWidget(QLabel("移動履歴（最新100件）"))
         self.move_history_table = QTableWidget()
         self.move_history_table.setColumnCount(5)
@@ -130,15 +143,13 @@ class MainWindow(QWidget):
         self.move_history_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.move_history_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.move_history_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
-        right.addWidget(self.move_history_table, 2)
+        right.addWidget(self.move_history_table, 1)
 
-        # ------------------------
-        # レイアウト結合
-        # ------------------------
-        main_layout.addLayout(left, 3)
-        main_layout.addLayout(right, 5)
-
-        tab.setLayout(main_layout)
+        # 全体のレイアウト
+        layout = QHBoxLayout()
+        layout.addLayout(left, 3)
+        layout.addLayout(right, 5)
+        tab.setLayout(layout)
         return tab
 
     def refresh_visualization(self):
@@ -291,6 +302,7 @@ class MainWindow(QWidget):
         QWidget {
             background-color: #2b2b2b;
             color: white;
+            font-size: 24px;
         }
         QLineEdit, QTreeWidget, QTableWidget {
             background-color: #3c3f41;
@@ -298,7 +310,7 @@ class MainWindow(QWidget):
         }
         QPushButton {
             background-color: #5c5c5c;
-            padding: 5px;
+            padding: 8px;
         }
         QPushButton:hover {
             background-color: #787878;
