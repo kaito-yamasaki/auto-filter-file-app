@@ -117,18 +117,23 @@ class MainWindow(QWidget):
 
     def build_visualization_tab(self):
         tab = QWidget()
-        left = QVBoxLayout()
+        main = QVBoxLayout()
 
         controls = QHBoxLayout()
         btn_refresh = QPushButton("表示を更新")
         btn_refresh.clicked.connect(self.refresh_visualization)
         controls.addWidget(btn_refresh)
         controls.addStretch()
-        left.addLayout(controls)
+        main.addLayout(controls)
 
+        content = QHBoxLayout()
+
+        left = QVBoxLayout()
         left.addWidget(QLabel("現在のフォルダ構成"))
         self.directory_tree = QTreeWidget()
         self.directory_tree.setHeaderLabels(["フォルダ / ファイル"])
+        self.directory_tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.directory_tree.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         left.addWidget(self.directory_tree, 1)
 
         right = QVBoxLayout()
@@ -143,13 +148,15 @@ class MainWindow(QWidget):
         self.move_history_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.move_history_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.move_history_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        self.move_history_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.move_history_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         right.addWidget(self.move_history_table, 1)
 
-        # 全体のレイアウト
-        layout = QHBoxLayout()
-        layout.addLayout(left, 3)
-        layout.addLayout(right, 5)
-        tab.setLayout(layout)
+        content.addLayout(left, 2)
+        content.addLayout(right, 5)
+        main.addLayout(content, 1)
+
+        tab.setLayout(main)
         return tab
 
     def refresh_visualization(self):
