@@ -102,10 +102,10 @@ class MainWindow(QWidget):
 
         right.addWidget(QLabel("ルール一覧"))
         self.rule_list = QListWidget()
-        right.addWidget(self.rule_list)
+        self.rule_list.setMinimumHeight(320)
+        right.addWidget(self.rule_list, 1)
 
         self.refresh_rules()
-        right.addStretch()
 
         # 全体のレイアウト
         layout = QHBoxLayout()
