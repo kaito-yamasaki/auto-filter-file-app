@@ -4,9 +4,32 @@ from PyQt6.QtWidgets import (
     QTabWidget, QTreeWidget, QTreeWidgetItem,
     QTableWidget, QTableWidgetItem, QHeaderView
 )
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import Qt
 import csv
 import os
+
+
+class DropArea(QLabel):
+    def __init__(self, on_files_dropped, parent=None):
+        super().__init__(parent)
+        self.on_files_dropped = on_files_dropped
+        self.setAcceptDrops(True)
+        self.setObjectName("dropArea")
+        self.setText("ここにファイルをドラッグ＆ドロップ")
+        self.setMinimumHeight(100)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dropEvent(self, event):
+        urls = event.mimeData().urls()
+        file_paths = [url.toLocalFile() for url in urls if url.isLocalFile()]
+        self.on_files_dropped(file_paths)
+        event.acceptProposedAction()
 
 
 class MainWindow(QWidget):
@@ -17,8 +40,6 @@ class MainWindow(QWidget):
         self.log_dir = config.get("log_dir", "logs")
         self.log_file = config.get("log_file", "sort_log.csv")
         self.log_path = os.path.join(self.log_dir, self.log_file)
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.process_incoming_files)
 
         self.setWindowTitle("Auto File Sorter")
         self.setGeometry(200, 200, 900, 500)
@@ -44,15 +65,9 @@ class MainWindow(QWidget):
         # ------------------------
         left = QVBoxLayout()
 
-        # 監視フォルダ
-        left.addWidget(QLabel("監視フォルダ"))
-        incoming_path = self.config.get("incoming", self.config.get("incoming_folder", ""))
-        self.incoming_input = QLineEdit(incoming_path)
-        btn_incoming = QPushButton("参照")
-        btn_incoming.clicked.connect(lambda: self.select_folder(self.incoming_input))
-
-        left.addWidget(self.incoming_input)
-        left.addWidget(btn_incoming)
+        left.addWidget(QLabel("ドラッグ＆ドロップ仕分け"))
+        self.drop_area = DropArea(self.process_dropped_files, self)
+        left.addWidget(self.drop_area)
 
         # 保存先
         left.addWidget(QLabel("保存先ルート"))
@@ -88,16 +103,6 @@ class MainWindow(QWidget):
         left.addWidget(self.rule_list)
 
         self.refresh_rules()
-
-        # 操作ボタン
-        self.btn_start = QPushButton("開始")
-        self.btn_start.clicked.connect(self.start)
-        self.btn_end = QPushButton("終了")
-        self.btn_end.clicked.connect(self.end)
-        self.btn_end.setEnabled(False)
-
-        left.addWidget(self.btn_start)
-        left.addWidget(self.btn_end)
 
         # ------------------------
         # 右パネル（ログ）
@@ -264,60 +269,25 @@ class MainWindow(QWidget):
         for k, v in self.config["rules"].items():
             self.rule_list.addItem(f"{k} → {v}")
 
-    # ------------------------
-    # 開始
-    # ------------------------
-    def start(self):
-        incoming_dir = self.incoming_input.text().strip()
-
-        if not incoming_dir or not os.path.isdir(incoming_dir):
-            self.log.append("⚠ 監視フォルダが存在しません")
+    def process_dropped_files(self, file_paths):
+        if not file_paths:
+            self.log.append("⚠ ドロップされたファイルがありません")
             return
 
-        if self.timer.isActive():
+        valid_files = [path for path in file_paths if os.path.isfile(path)]
+        skipped = len(file_paths) - len(valid_files)
+
+        if not valid_files:
+            self.log.append("⚠ ファイルのみドロップできます")
             return
 
-        self.timer.start(1000)
-        self.btn_start.setEnabled(False)
-        self.btn_end.setEnabled(True)
-        self.log.append("監視を開始しました")
-
-    # ------------------------
-    # 停止
-    # ------------------------
-    def end(self):
-        if not self.timer.isActive():
-            return
-
-        self.timer.stop()
-        self.btn_start.setEnabled(True)
-        self.btn_end.setEnabled(False)
-        self.log.append("監視を停止しました")
-
-    # ------------------------
-    # 監視フォルダ処理
-    # ------------------------
-    def process_incoming_files(self):
-        incoming_dir = self.incoming_input.text().strip()
-
-        if not incoming_dir or not os.path.isdir(incoming_dir):
-            self.log.append("⚠ 監視フォルダが存在しません")
-            self.end()
-            return
-
-        files = [
-            os.path.join(incoming_dir, name)
-            for name in os.listdir(incoming_dir)
-            if os.path.isfile(os.path.join(incoming_dir, name))
-        ]
-
-        if not files:
-            return
-
-        for path in files:
+        for path in valid_files:
             self.sorter.sort(path)
 
-        self.log.append(f"仕分け実行: {len(files)} 件")
+        message = f"ドラッグ＆ドロップ仕分け: {len(valid_files)} 件"
+        if skipped > 0:
+            message += f"（フォルダ等を {skipped} 件スキップ）"
+        self.log.append(message)
         self.refresh_visualization()
 
     # ------------------------
@@ -342,5 +312,11 @@ class MainWindow(QWidget):
         }
         QListWidget {
             background-color: #3c3f41;
+        }
+        #dropArea {
+            border: 2px dashed #787878;
+            border-radius: 6px;
+            background-color: #3c3f41;
+            padding: 10px;
         }
         """
