@@ -10,7 +10,8 @@
 ## ログ
 
 - 既定で `logs/sort_log.csv` を出力
-- 出力項目: `datetime, filename, folder, user, status, message`
+- 出力項目: `datetime, status, filename, source_path, destination_path, destination_folder, user, note`
+- `source_path` と `destination_path` により、どこからどこへ移動したかを直接確認可能
 
 `rules.json` で以下の設定が可能です。
 
