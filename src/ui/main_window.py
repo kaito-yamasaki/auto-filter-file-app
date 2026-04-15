@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QLineEdit, QTextEdit, QListWidget, QFileDialog,
-    QTabWidget, QTreeWidget, QTreeWidgetItem,
+    QLabel, QLineEdit, QListWidget, QFileDialog,
+    QTreeWidget, QTreeWidgetItem,
     QTableWidget, QTableWidgetItem, QHeaderView
 )
 from PyQt6.QtCore import Qt
@@ -48,11 +48,7 @@ class MainWindow(QWidget):
         self.setGeometry(200, 200, 900, 500)
 
         main_layout = QVBoxLayout()
-        self.tabs = QTabWidget()
-        self.tabs.addTab(self.build_main_tab(), "仕分け")
-        self.tabs.addTab(self.build_visual_tab(), "可視化")
-        self.tabs.currentChanged.connect(self.on_tab_changed)
-        main_layout.addWidget(self.tabs)
+        main_layout.addWidget(self.build_main_tab())
 
         self.setLayout(main_layout)
 
@@ -108,42 +104,22 @@ class MainWindow(QWidget):
         self.refresh_rules()
 
         # ------------------------
-        # 右パネル（ログ）
+        # 右パネル（可視化）
         # ------------------------
         right = QVBoxLayout()
-        right.addWidget(QLabel("ログ"))
-
-        self.log = QTextEdit()
-        self.log.setReadOnly(True)
-
-        right.addWidget(self.log)
-
-        # ------------------------
-        # レイアウト結合
-        # ------------------------
-        main_layout.addLayout(left, 3)
-        main_layout.addLayout(right, 5)
-
-        tab.setLayout(main_layout)
-        return tab
-
-    def build_visual_tab(self):
-        tab = QWidget()
-        layout = QVBoxLayout()
-
         controls = QHBoxLayout()
         btn_refresh = QPushButton("表示を更新")
         btn_refresh.clicked.connect(self.refresh_visualization)
         controls.addWidget(btn_refresh)
         controls.addStretch()
-        layout.addLayout(controls)
+        right.addLayout(controls)
 
-        layout.addWidget(QLabel("現在のフォルダ構成"))
+        right.addWidget(QLabel("現在のフォルダ構成"))
         self.directory_tree = QTreeWidget()
         self.directory_tree.setHeaderLabels(["フォルダ / ファイル"])
-        layout.addWidget(self.directory_tree, 3)
+        right.addWidget(self.directory_tree, 3)
 
-        layout.addWidget(QLabel("移動履歴（最新100件）"))
+        right.addWidget(QLabel("移動履歴（最新100件）"))
         self.move_history_table = QTableWidget()
         self.move_history_table.setColumnCount(5)
         self.move_history_table.setHorizontalHeaderLabels([
@@ -154,14 +130,16 @@ class MainWindow(QWidget):
         self.move_history_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.move_history_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.move_history_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
-        layout.addWidget(self.move_history_table, 2)
+        right.addWidget(self.move_history_table, 2)
 
-        tab.setLayout(layout)
+        # ------------------------
+        # レイアウト結合
+        # ------------------------
+        main_layout.addLayout(left, 3)
+        main_layout.addLayout(right, 5)
+
+        tab.setLayout(main_layout)
         return tab
-
-    def on_tab_changed(self, index):
-        if self.tabs.tabText(index) == "可視化":
-            self.refresh_visualization()
 
     def refresh_visualization(self):
         self.refresh_directory_tree()
@@ -242,13 +220,13 @@ class MainWindow(QWidget):
         path = self.path_input.text().strip()
 
         if not key or not path:
-            self.log.append("⚠ 入力不足")
+            self.append_message("⚠ 入力不足")
             return
 
         self.config["rules"][key] = path
         self.save_config_file()
         self.refresh_rules()
-        self.log.append(f"追加: {key} → {path}")
+        self.append_message(f"追加: {key} → {path}")
 
     # ------------------------
     # ルール削除
@@ -264,14 +242,14 @@ class MainWindow(QWidget):
         del self.config["rules"][key]
         self.save_config_file()
         self.refresh_rules()
-        self.log.append(f"削除: {key}")
+        self.append_message(f"削除: {key}")
 
     def save_config_file(self):
         try:
             with open(self.config_path, "w", encoding="utf-8") as file:
                 json.dump(self.config, file, ensure_ascii=False, indent=2)
         except OSError as error:
-            self.log.append(f"⚠ rules.json 保存失敗: {error}")
+            self.append_message(f"⚠ rules.json 保存失敗: {error}")
 
     # ------------------------
     # ルール一覧更新
@@ -283,14 +261,14 @@ class MainWindow(QWidget):
 
     def process_dropped_files(self, file_paths):
         if not file_paths:
-            self.log.append("⚠ ドロップされたファイルがありません")
+            self.append_message("⚠ ドロップされたファイルがありません")
             return
 
         valid_files = [path for path in file_paths if os.path.isfile(path)]
         skipped = len(file_paths) - len(valid_files)
 
         if not valid_files:
-            self.log.append("⚠ ファイルのみドロップできます")
+            self.append_message("⚠ ファイルのみドロップできます")
             return
 
         for path in valid_files:
@@ -299,8 +277,11 @@ class MainWindow(QWidget):
         message = f"ドラッグ＆ドロップ仕分け: {len(valid_files)} 件"
         if skipped > 0:
             message += f"（フォルダ等を {skipped} 件スキップ）"
-        self.log.append(message)
+        self.append_message(message)
         self.refresh_visualization()
+
+    def append_message(self, message):
+        print(message)
 
     # ------------------------
     # ダークテーマ
@@ -311,7 +292,7 @@ class MainWindow(QWidget):
             background-color: #2b2b2b;
             color: white;
         }
-        QLineEdit, QTextEdit, QTreeWidget, QTableWidget {
+        QLineEdit, QTreeWidget, QTableWidget {
             background-color: #3c3f41;
             color: white;
         }
