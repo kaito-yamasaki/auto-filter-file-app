@@ -20,7 +20,7 @@ class DropArea(QLabel):
         self.setAcceptDrops(True)
         self.setObjectName("dropArea")
         self.setText("ここにファイルをドラッグ＆ドロップ")
-        self.setMinimumHeight(100)
+        self.setMinimumHeight(160)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
     def dragEnterEvent(self, event):
@@ -70,7 +70,7 @@ class MainWindow(QWidget):
 
         left.addWidget(QLabel("ドラッグ＆ドロップ仕分け"))
         self.drop_area = DropArea(self.process_dropped_files, self)
-        left.addWidget(self.drop_area)
+        left.addWidget(self.drop_area, 2)
 
         left.addWidget(QLabel("保存先ルート"))
         root_path = self.config.get("root", self.config.get("project_root", ""))
@@ -142,15 +142,16 @@ class MainWindow(QWidget):
         right = QVBoxLayout()
         right.addWidget(QLabel("移動履歴（最新100件）"))
         self.move_history_table = QTableWidget()
-        self.move_history_table.setColumnCount(5)
+        self.move_history_table.setColumnCount(6)
         self.move_history_table.setHorizontalHeaderLabels([
-            "日時", "ファイル名", "移動先（ルール）", "ユーザー名", "備考"
+            "日時", "結果", "ファイル名", "移動先（ルール）", "ユーザー名", "備考"
         ])
         self.move_history_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.move_history_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.move_history_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.move_history_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        self.move_history_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        self.move_history_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        self.move_history_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
         self.move_history_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.move_history_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         right.addWidget(self.move_history_table, 1)
@@ -210,7 +211,8 @@ class MainWindow(QWidget):
         try:
             with open(self.log_path, "r", encoding="utf-8-sig", newline="") as file:
                 reader = csv.DictReader(file)
-                moved_rows = [row for row in reader if row.get("status") == "MOVED"]
+                target_statuses = {"MOVED", "FAILED", "UNCLASSIFIED"}
+                moved_rows = [row for row in reader if row.get("status") in target_statuses]
         except OSError:
             return
 
@@ -220,10 +222,11 @@ class MainWindow(QWidget):
         self.move_history_table.setRowCount(len(recent_rows))
         for row_index, row in enumerate(recent_rows):
             self.move_history_table.setItem(row_index, 0, QTableWidgetItem(row.get("datetime", "")))
-            self.move_history_table.setItem(row_index, 1, QTableWidgetItem(row.get("filename", "")))
-            self.move_history_table.setItem(row_index, 2, QTableWidgetItem(row.get("destination_folder", "")))
-            self.move_history_table.setItem(row_index, 3, QTableWidgetItem(row.get("user", "")))
-            self.move_history_table.setItem(row_index, 4, QTableWidgetItem(row.get("note", "")))
+            self.move_history_table.setItem(row_index, 1, QTableWidgetItem(row.get("status", "")))
+            self.move_history_table.setItem(row_index, 2, QTableWidgetItem(row.get("filename", "")))
+            self.move_history_table.setItem(row_index, 3, QTableWidgetItem(row.get("destination_folder", "")))
+            self.move_history_table.setItem(row_index, 4, QTableWidgetItem(row.get("user", "")))
+            self.move_history_table.setItem(row_index, 5, QTableWidgetItem(row.get("note", "")))
 
     # ------------------------
     # フォルダ選択
