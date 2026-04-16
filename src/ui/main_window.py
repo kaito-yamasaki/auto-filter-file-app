@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QFileDialog,
     QTabWidget,
     QTreeWidget, QTreeWidgetItem,
-    QTableWidget, QTableWidgetItem, QHeaderView
+    QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox
 )
 from PyQt6.QtCore import Qt
 import csv
@@ -249,6 +249,11 @@ class MainWindow(QWidget):
         if not root_path:
             return
 
+        if not os.path.isdir(root_path):
+            self.show_warning_popup("保存先フォルダが存在しません", f"指定されたフォルダが見つかりません:\n{root_path}")
+            self.append_message(f"⚠ 保存先フォルダが存在しません: {root_path}")
+            return
+
         current_root = self.config.get("root", "")
         if current_root == root_path:
             return
@@ -328,6 +333,15 @@ class MainWindow(QWidget):
             self.append_message("⚠ ドロップされたファイルがありません")
             return
 
+        root_path = self.root_input.text().strip()
+        if not root_path or not os.path.isdir(root_path):
+            self.show_warning_popup("保存先フォルダが存在しません", f"参照先フォルダを確認してください:\n{root_path or '(未設定)'}")
+            self.append_message(f"⚠ 参照先フォルダが存在しません: {root_path or '(未設定)'}")
+            return
+
+        if hasattr(self.sorter, "file_repo"):
+            self.sorter.file_repo.root_path = root_path
+
         valid_files = [path for path in file_paths if os.path.isfile(path)]
         skipped = len(file_paths) - len(valid_files)
 
@@ -346,6 +360,9 @@ class MainWindow(QWidget):
 
     def append_message(self, message):
         print(message)
+
+    def show_warning_popup(self, title, message):
+        QMessageBox.warning(self, title, message)
 
     # ------------------------
     # ダークテーマ

@@ -9,16 +9,19 @@ class FileRepository:
         if not os.path.exists(src):
             return None
 
+        if not self.root_path or not os.path.isdir(self.root_path):
+            return None
+
         target = os.path.join(self.root_path, relative_path)
-        os.makedirs(target, exist_ok=True)
-
-        dst = os.path.join(target, os.path.basename(src))
-        dst = self._resolve_duplicate_path(dst)
-
         try:
+            os.makedirs(target, exist_ok=True)
+
+            dst = os.path.join(target, os.path.basename(src))
+            dst = self._resolve_duplicate_path(dst)
+
             shutil.move(src, dst)
             return dst
-        except FileNotFoundError:
+        except (FileNotFoundError, OSError):
             return None
 
     def _resolve_duplicate_path(self, destination_path):
