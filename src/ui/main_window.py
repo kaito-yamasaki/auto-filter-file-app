@@ -9,7 +9,7 @@ from PyQt6.QtCore import Qt
 import csv
 import json
 import os
-from pathlib import Path
+from config.config_loader import get_config_path
 
 
 class DropArea(QLabel):
@@ -43,7 +43,7 @@ class MainWindow(QWidget):
         self.log_dir = config.get("log_dir", "logs")
         self.log_file = config.get("log_file", "sort_log.csv")
         self.log_path = os.path.join(self.log_dir, self.log_file)
-        self.config_path = Path(__file__).resolve().parents[2] / "rules.json"
+        self.config_path = get_config_path()
 
         self.setWindowTitle("Auto File Sorter")
         self.setGeometry(200, 200, 900, 500)
