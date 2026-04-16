@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt
 import csv
 import json
 import os
+from application.rule import Rule
 from config.config_loader import get_config_path
 
 
@@ -54,6 +55,7 @@ class MainWindow(QWidget):
         self.setLayout(main_layout)
 
         self.setStyleSheet(self.dark_theme())
+        self.sync_rule_engine()
         self.refresh_visualization()
 
     def build_main_tabs(self):
@@ -73,8 +75,9 @@ class MainWindow(QWidget):
         left.addWidget(QLabel("保存先ルート"))
         root_path = self.config.get("root", self.config.get("project_root", ""))
         self.root_input = QLineEdit(root_path)
+        self.root_input.editingFinished.connect(self.save_root_path)
         btn_root = QPushButton("参照")
-        btn_root.clicked.connect(lambda: self.select_folder(self.root_input))
+        btn_root.clicked.connect(self.select_root_folder)
 
         left.addWidget(self.root_input)
         left.addWidget(btn_root)
@@ -230,6 +233,36 @@ class MainWindow(QWidget):
         if folder:
             field.setText(folder)
 
+    def select_root_folder(self):
+        folder = QFileDialog.getExistingDirectory()
+        if not folder:
+            return
+
+        self.root_input.setText(folder)
+        self.save_root_path()
+
+    def save_root_path(self):
+        root_path = self.root_input.text().strip()
+        if not root_path:
+            return
+
+        current_root = self.config.get("root", "")
+        if current_root == root_path:
+            return
+
+        self.config["root"] = root_path
+        self.save_config_file()
+        self.refresh_visualization()
+        self.append_message(f"保存先ルートを更新: {root_path}")
+
+    def sync_rule_engine(self):
+        if not hasattr(self.sorter, "rule_engine"):
+            return
+
+        rules = [Rule(k, v) for k, v in self.config.get("rules", {}).items()]
+        self.sorter.rule_engine.rules = rules
+        self.sorter.rule_engine.default_path = self.config.get("default")
+
     # ------------------------
     # ルール追加
     # ------------------------
@@ -242,6 +275,7 @@ class MainWindow(QWidget):
             return
 
         self.config["rules"][key] = path
+        self.sync_rule_engine()
         self.save_config_file()
         self.refresh_rules()
         self.append_message(f"追加: {key} → {path}")
@@ -264,6 +298,7 @@ class MainWindow(QWidget):
             return
 
         del self.config["rules"][key]
+        self.sync_rule_engine()
         self.save_config_file()
         self.refresh_rules()
         self.append_message(f"削除: {key}")
