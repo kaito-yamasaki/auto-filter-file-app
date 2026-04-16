@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QLineEdit, QListWidget, QFileDialog,
+    QLabel, QLineEdit, QListWidget, QListWidgetItem, QFileDialog,
     QTabWidget,
     QTreeWidget, QTreeWidgetItem,
     QTableWidget, QTableWidgetItem, QHeaderView
@@ -254,8 +254,14 @@ class MainWindow(QWidget):
         if not selected:
             return
 
-        text = selected.text()
-        key = text.split(" → ")[0]
+        key = selected.data(Qt.ItemDataRole.UserRole)
+        if not key:
+            self.append_message("⚠ 削除対象のキー取得に失敗しました")
+            return
+
+        if key not in self.config["rules"]:
+            self.append_message(f"⚠ ルールが見つかりません: {key}")
+            return
 
         del self.config["rules"][key]
         self.save_config_file()
@@ -275,7 +281,9 @@ class MainWindow(QWidget):
     def refresh_rules(self):
         self.rule_list.clear()
         for k, v in self.config["rules"].items():
-            self.rule_list.addItem(f"{k} → {v}")
+            item = QListWidgetItem(f"{k} → {v}")
+            item.setData(Qt.ItemDataRole.UserRole, k)
+            self.rule_list.addItem(item)
 
     def process_dropped_files(self, file_paths):
         if not file_paths:
