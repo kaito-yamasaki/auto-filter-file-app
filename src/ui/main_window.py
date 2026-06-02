@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QFileDialog,
     QTabWidget,
     QTreeWidget, QTreeWidgetItem,
-    QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox
+    QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QDialog
 )
 from PyQt6.QtCore import Qt
 import csv
@@ -37,6 +37,8 @@ class DropArea(QLabel):
 
 
 class MainWindow(QWidget):
+    HISTORY_HEADERS = ["日時", "結果", "ファイル名", "移動先（ルール）", "ユーザー名", "備考"]
+
     def __init__(self, sorter, config):
         super().__init__()
         self.sorter = sorter
@@ -45,6 +47,11 @@ class MainWindow(QWidget):
         self.log_file = config.get("log_file", "sort_log.csv")
         self.log_path = os.path.join(self.log_dir, self.log_file)
         self.config_path = get_config_path()
+        self.history_limit = int(self.config.get("history_limit", 100) or 100)
+        self.history_filters = {}
+        self.history_all_rows = []
+        self.history_sort_column = 0
+        self.history_sort_order = Qt.SortOrder.DescendingOrder
 
         self.setWindowTitle("Auto File Sorter")
         self.setGeometry(200, 200, 900, 500)
@@ -126,6 +133,26 @@ class MainWindow(QWidget):
         btn_refresh = QPushButton("表示を更新")
         btn_refresh.clicked.connect(self.refresh_visualization)
         controls.addWidget(btn_refresh)
+
+        controls.addWidget(QLabel("履歴件数"))
+        self.history_limit_input = QLineEdit(str(self.history_limit))
+        self.history_limit_input.setMaximumWidth(80)
+        btn_apply_limit = QPushButton("件数適用")
+        btn_apply_limit.clicked.connect(self.apply_history_limit)
+        controls.addWidget(self.history_limit_input)
+        controls.addWidget(btn_apply_limit)
+
+        self.filter_status_label = QLabel("フィルター: なし")
+        controls.addWidget(self.filter_status_label)
+
+        btn_filter_popup = QPushButton("フィルター設定")
+        btn_filter_popup.clicked.connect(self.open_history_filter_popup_for_current_sort)
+        controls.addWidget(btn_filter_popup)
+
+        btn_clear_filter = QPushButton("フィルター解除")
+        btn_clear_filter.clicked.connect(self.clear_history_filter)
+        controls.addWidget(btn_clear_filter)
+
         controls.addStretch()
         main.addLayout(controls)
 
@@ -140,12 +167,21 @@ class MainWindow(QWidget):
         left.addWidget(self.directory_tree, 1)
 
         right = QVBoxLayout()
-        right.addWidget(QLabel("移動履歴（最新100件）"))
+        self.move_history_title_label = QLabel()
+        self.update_history_title_label()
+        right.addWidget(self.move_history_title_label)
         self.move_history_table = QTableWidget()
         self.move_history_table.setColumnCount(6)
-        self.move_history_table.setHorizontalHeaderLabels([
-            "日時", "結果", "ファイル名", "移動先（ルール）", "ユーザー名", "備考"
-        ])
+        self.move_history_table.setHorizontalHeaderLabels(self.HISTORY_HEADERS)
+        self.move_history_table.setSortingEnabled(True)
+        self.move_history_table.horizontalHeader().setSectionsMovable(True)
+        self.move_history_table.horizontalHeader().setSortIndicatorShown(True)
+        self.move_history_table.horizontalHeader().setSortIndicator(
+            self.history_sort_column,
+            self.history_sort_order,
+        )
+        self.move_history_table.horizontalHeader().sortIndicatorChanged.connect(self.on_history_sort_changed)
+        self.move_history_table.cellClicked.connect(self.open_history_filter_popup_from_cell)
         self.move_history_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.move_history_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.move_history_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -203,9 +239,11 @@ class MainWindow(QWidget):
                 self.add_tree_items(child, full_path)
 
     def refresh_move_history(self):
+        self.move_history_table.setSortingEnabled(False)
         self.move_history_table.setRowCount(0)
 
         if not os.path.exists(self.log_path):
+            self.move_history_table.setSortingEnabled(True)
             return
 
         try:
@@ -214,9 +252,12 @@ class MainWindow(QWidget):
                 target_statuses = {"MOVED", "FAILED", "UNCLASSIFIED"}
                 moved_rows = [row for row in reader if row.get("status") in target_statuses]
         except OSError:
+            self.move_history_table.setSortingEnabled(True)
             return
 
-        recent_rows = moved_rows[-100:]
+        self.history_all_rows = moved_rows
+        filtered_rows = self.filter_history_rows(moved_rows)
+        recent_rows = filtered_rows[-self.history_limit:]
         recent_rows.reverse()
 
         self.move_history_table.setRowCount(len(recent_rows))
@@ -227,6 +268,193 @@ class MainWindow(QWidget):
             self.move_history_table.setItem(row_index, 3, QTableWidgetItem(row.get("destination_folder", "")))
             self.move_history_table.setItem(row_index, 4, QTableWidgetItem(row.get("user", "")))
             self.move_history_table.setItem(row_index, 5, QTableWidgetItem(row.get("note", "")))
+
+        self.update_filter_status_label()
+        self.move_history_table.setSortingEnabled(True)
+        self.move_history_table.sortItems(self.history_sort_column, self.history_sort_order)
+
+    def filter_history_rows(self, rows):
+        if not self.history_filters:
+            return rows
+
+        key_by_column = {
+            0: "datetime",
+            1: "status",
+            2: "filename",
+            3: "destination_folder",
+            4: "user",
+            5: "note",
+        }
+        filtered = []
+        for row in rows:
+            matched = True
+            for column, values in self.history_filters.items():
+                key = key_by_column.get(column)
+                if not key:
+                    continue
+
+                row_value = str(row.get(key, ""))
+                normalized_row_value = row_value.casefold()
+                normalized_targets = {str(v).casefold() for v in values}
+                if normalized_row_value not in normalized_targets:
+                    matched = False
+                    break
+
+            if matched:
+                filtered.append(row)
+
+        return filtered
+
+    def apply_history_limit(self):
+        text = self.history_limit_input.text().strip()
+        try:
+            value = int(text)
+        except ValueError:
+            self.append_message("⚠ 履歴件数は整数で入力してください")
+            self.history_limit_input.setText(str(self.history_limit))
+            return
+
+        if value <= 0:
+            self.append_message("⚠ 履歴件数は1以上で入力してください")
+            self.history_limit_input.setText(str(self.history_limit))
+            return
+
+        self.history_limit = value
+        self.config["history_limit"] = value
+        self.update_history_title_label()
+        self.save_config_file()
+        self.refresh_move_history()
+        self.append_message(f"履歴件数を更新: {value}")
+
+    def update_history_title_label(self):
+        if hasattr(self, "move_history_title_label"):
+            self.move_history_title_label.setText(f"移動履歴（最新{self.history_limit}件）")
+
+    def on_history_sort_changed(self, column, order):
+        self.history_sort_column = column
+        self.history_sort_order = order
+
+    def open_history_filter_popup_from_cell(self, row, column):
+        item = self.move_history_table.item(row, column)
+        preselect_value = ""
+        if item:
+            preselect_value = item.text().strip()
+
+        self.open_history_filter_popup(column, preselect_value)
+
+    def open_history_filter_popup_for_current_sort(self):
+        self.open_history_filter_popup(self.history_sort_column)
+
+    def open_history_filter_popup(self, column, preselect_value=""):
+        key_by_column = {
+            0: "datetime",
+            1: "status",
+            2: "filename",
+            3: "destination_folder",
+            4: "user",
+            5: "note",
+        }
+        key = key_by_column.get(column)
+        if key is None:
+            return
+
+        values = sorted({str(row.get(key, "")) for row in self.history_all_rows})
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"フィルター設定: {self.HISTORY_HEADERS[column]}")
+        dialog.resize(520, 420)
+
+        layout = QVBoxLayout(dialog)
+        info = QLabel("チェックした項目だけ表示します")
+        layout.addWidget(info)
+
+        value_list = QListWidget()
+        current_selected = set(self.history_filters.get(column, set()))
+        for value in values:
+            item = QListWidgetItem(value)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+
+            should_check = False
+            if current_selected:
+                should_check = value in current_selected
+            elif preselect_value:
+                should_check = value == preselect_value
+
+            item.setCheckState(Qt.CheckState.Checked if should_check else Qt.CheckState.Unchecked)
+            value_list.addItem(item)
+        layout.addWidget(value_list, 1)
+
+        controls = QHBoxLayout()
+        btn_all = QPushButton("全選択")
+        btn_none = QPushButton("全解除")
+        btn_clear_column = QPushButton("この列のフィルター解除")
+        controls.addWidget(btn_all)
+        controls.addWidget(btn_none)
+        controls.addWidget(btn_clear_column)
+        controls.addStretch()
+        layout.addLayout(controls)
+
+        actions = QHBoxLayout()
+        btn_cancel = QPushButton("キャンセル")
+        btn_apply = QPushButton("適用")
+        actions.addStretch()
+        actions.addWidget(btn_cancel)
+        actions.addWidget(btn_apply)
+        layout.addLayout(actions)
+
+        def set_all_checked(state):
+            for index in range(value_list.count()):
+                target_item = value_list.item(index)
+                target_item.setCheckState(state)
+
+        def clear_column_filter():
+            self.history_filters.pop(column, None)
+            self.refresh_move_history()
+            self.append_message(f"履歴フィルター解除: {self.HISTORY_HEADERS[column]}")
+            dialog.accept()
+
+        def apply_filter():
+            selected_values = set()
+            for index in range(value_list.count()):
+                target_item = value_list.item(index)
+                if target_item.checkState() == Qt.CheckState.Checked:
+                    selected_values.add(target_item.text())
+
+            if selected_values:
+                self.history_filters[column] = selected_values
+                self.append_message(f"履歴フィルター適用: {self.HISTORY_HEADERS[column]} ({len(selected_values)}件)")
+            else:
+                self.history_filters.pop(column, None)
+                self.append_message(f"履歴フィルター解除: {self.HISTORY_HEADERS[column]}")
+
+            self.refresh_move_history()
+            dialog.accept()
+
+        btn_all.clicked.connect(lambda: set_all_checked(Qt.CheckState.Checked))
+        btn_none.clicked.connect(lambda: set_all_checked(Qt.CheckState.Unchecked))
+        btn_clear_column.clicked.connect(clear_column_filter)
+        btn_cancel.clicked.connect(dialog.reject)
+        btn_apply.clicked.connect(apply_filter)
+
+        dialog.exec()
+
+    def clear_history_filter(self):
+        self.history_filters = {}
+        self.refresh_move_history()
+        self.append_message("履歴フィルターを解除")
+
+    def update_filter_status_label(self):
+        if not self.history_filters:
+            self.filter_status_label.setText("フィルター: なし")
+            return
+
+        parts = []
+        for column in sorted(self.history_filters.keys()):
+            header = self.HISTORY_HEADERS[column]
+            count = len(self.history_filters[column])
+            parts.append(f"{header}:{count}")
+
+        self.filter_status_label.setText("フィルター: " + " / ".join(parts))
 
     # ------------------------
     # フォルダ選択
